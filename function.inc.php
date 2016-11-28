@@ -1,5 +1,43 @@
 <?php
 
+function get_youtu_sign(){
+    $result = json_decode(http_get('https://open.youtu.qq.com/experience_ctl/get_sign'),true);
+    if(!isset($result['sign'])){
+        error_log('Can\'t get sign from youtu !' . PHP_EOL);
+        return false;
+    }
+    return $result['sign'];
+    
+}
+
+function img_type_check($pic,$sign=''){
+    if (!$sign){
+        $sign = get_youtu_sign();
+    }
+    
+    $ch = curl_init();
+    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+    curl_setopt($ch,CURLOPT_URL,'https://open.youtu.qq.com/youtu/imageapi/imagetag');
+    $data = '{"image":"' . base64_encode($pic) . '","app_id":"1000031"}';
+    curl_setopt( $ch, CURLOPT_POSTFIELDS, $data );
+    curl_setopt( $ch, CURLOPT_HTTPHEADER, array('Content-Type:application/json','Authorization:'.$sign));
+    $result = json_decode(curl_exec($ch),true);
+    curl_close($ch);
+    if($result['errorcode'] != 0 || !isset($result['tags'])) {
+        error_log('Can\'t upload image to youtu !' . PHP_EOL);
+        error_log(json_encode($result) . PHP_EOL);
+        return false;
+    }
+    
+    foreach($result['tags'] as $tag){
+        if ($tag['tag_name'] == '卡通' && $tag['tag_confidence'] > 35 ){
+            return 2;
+        }
+    }
+    return 3;
+    
+}
+
 function fam(){
     $func_array = array();
     $var_array = func_get_args();
@@ -11,14 +49,15 @@ function fam(){
                             function () use ($f_name) {
                                 return call_user_func_array($f_name,func_get_args());
                             },
-                            function () use ($b_name) {
+                            $b_name ? function () use ($b_name) {
                                 return call_user_func_array($b_name,func_get_args());
-                            }
+                            } : function () {return;}
         );
     }
     return $func_array;
 }
 
+define('TYPE_FILTER','img_type_check,get_youtu_sign');
 define('PORN_FILTER','img_pron_check,get_qcloud_sign');
 
 function get_qcloud_sign(){
