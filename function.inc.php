@@ -1,5 +1,10 @@
 <?php
 
+define('TYPE_FILTER','img_type_check,get_youtu_sign');
+define('PORN_FILTER','img_pron_check,get_qcloud_sign');
+
+
+
 function get_youtu_sign(){
     $result = json_decode(http_get('https://open.youtu.qq.com/experience_ctl/get_sign'),true);
     if(!isset($result['sign'])){
@@ -56,9 +61,6 @@ function fam(){
     }
     return $func_array;
 }
-
-define('TYPE_FILTER','img_type_check,get_youtu_sign');
-define('PORN_FILTER','img_pron_check,get_qcloud_sign');
 
 function get_qcloud_sign(){
     $sign = '';
@@ -209,14 +211,14 @@ function posts_check_basic($posts){
         if($post['type'] == 'photo'){
             $photo_num++;
             foreach($post['photos'] as $photo){
-                if(substr($photo['original_size']['url'],-4) == '.gif'){$gif_num++;}
+                if(substr($photo['original_size']['url'],-4) == '.gif'){$gif_num++;break;}
             }
         }
     }
     
-    if ($photo_num < count($posts)*0.9){return false;}
-    if ($gif_num > count($posts)*0.2){return false;}
-    if ($date < @strtotime("-33 days")){return false;}
+    if ($photo_num < (count($posts)*0.9)){return false;}
+    if ($gif_num > (count($posts)*0.2)){return false;}
+    if ($date < @strtotime("-50 days")){return false;}
     return true;
 }
 
