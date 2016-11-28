@@ -1,5 +1,26 @@
 <?php
 
+function fam(){
+    $func_array = array();
+    $var_array = func_get_args();
+    foreach ($var_array as $func_name) {
+        $tmp = explode(',',$func_name);
+        $f_name = $tmp[0];
+        $b_name = $tmp[1];
+        $func_array[] = img_list_func_maker( 
+                            function () use ($f_name) {
+                                return call_user_func_array($f_name,func_get_args());
+                            },
+                            function () use ($b_name) {
+                                return call_user_func_array($b_name,func_get_args());
+                            }
+        );
+    }
+    return $func_array;
+}
+
+define('PORN_FILTER','img_pron_check,get_qcloud_sign');
+
 function get_qcloud_sign(){
     $sign = '';
     $ch = curl_init();
@@ -46,7 +67,7 @@ function img_pron_check($pic,$sign=''){
     $result = json_decode(curl_exec($ch),true);
     if($result['message'] != 'SUCCESS'){
         error_log('Can\'t upload image to qcloud!' . PHP_EOL . json_encode($result) . PHP_EOL);
-        continue;
+        return false;
     }
         
     curl_close($ch);
@@ -101,76 +122,6 @@ function img_list_process($img_list,$func_array){
     }
     return $func_storage_array;
     
-}
-
-function img_list_check($img_list){
-    $img_info_list = array();
-    
-    $ch_tumblr = curl_init();
-    curl_setopt($ch_tumblr, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch_tumblr, CURLOPT_TIMEOUT, 30);
-    curl_setopt($ch_tumblr,CURLOPT_FORBID_REUSE,0);
-    curl_setopt($ch_tumblr, CURLOPT_HTTPHEADER, array(
-        'Connection: Keep-Alive',
-        'Keep-Alive: 300'
-    ));
-    curl_setopt($ch_tumblr,CURLOPT_ENCODING , "gzip");
-    
-    $sign = '';
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "Content-Type: multipart/form-data",
-        ]
-    );
-    $body = [ "filecontent" => 'None' , ];
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-    for ($i = 0; $i < 10; $i++){
-        $sign = json_decode(http_get('http://image.qcloud.com/api.php?Action=DetectDemo.GetSign'),true)['sign'];
-        curl_setopt($ch,CURLOPT_URL,"http://web.image.myqcloud.com/photos/v2/10000037/detect/0?sign=${sign}");
-        $t_result = json_decode(curl_exec($ch),true);
-        if($t_result['code'] != -70){break;}
-        print_log('Waiting for qcloud sign...');
-        sleep(1);
-    }
-    if (!$sign){
-        error_log('Can\'t get sign from qcloud !' . PHP_EOL);
-        return false;
-    }
-    
-    foreach($img_list as $id => $pic_url){
-        print_log("Checking " . $id . "/" . count($img_list) . " image" );
-        curl_setopt($ch_tumblr,CURLOPT_URL,$pic_url);
-        $pic = curl_exec($ch_tumblr);
-        //echo curl_getinfo($ch_tumblr,CURLINFO_LOCAL_PORT) . PHP_EOL;
-        
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Content-Type: multipart/form-data",
-            ]
-        );
-        curl_setopt($ch,CURLOPT_URL,"http://web.image.myqcloud.com/photos/v2/10000037/detect/0?sign=${sign}");
-        $body = [ "filecontent" => $pic , ];
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        $result = json_decode(curl_exec($ch),true);
-        if($result['message'] != 'SUCCESS'){
-            error_log('Can\'t upload image to qcloud!' . PHP_EOL . json_encode($result) . PHP_EOL);
-            continue;
-        }
-        curl_close($ch);
-        
-        $s_result = json_decode(
-            http_get("http://image.qcloud.com/api.php?Action=DetectDemo.Porn&fileId=" . $result['data']['fileid']),
-            true); 
-        if($s_result['code'] != 0){
-            error_log('Can\'t get result from qcloud!' . PHP_EOL . json_encode($s_result) . PHP_EOL);
-            continue;
-        }
-        $img_info_list[$id] = $s_result['data'];
-    }
-    return $img_info_list;
 }
 
 function get_img_list($posts){
