@@ -1,5 +1,108 @@
 <?php
 
+function get_qcloud_sign(){
+    $sign = '';
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Content-Type: multipart/form-data",
+        ]
+    );
+    $body = [ "filecontent" => 'None' , ];
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    for ($i = 0; $i < 10; $i++){
+        $sign = json_decode(http_get('http://image.qcloud.com/api.php?Action=DetectDemo.GetSign'),true)['sign'];
+        curl_setopt($ch,CURLOPT_URL,"http://web.image.myqcloud.com/photos/v2/10000037/detect/0?sign=${sign}");
+        $t_result = json_decode(curl_exec($ch),true);
+        if($t_result['code'] != -70){break;}
+        print_log('Waiting for qcloud sign...');
+        sleep(1);
+        if($i == 9){
+            return false;
+        }
+    }
+    if (!$sign){
+        error_log('Can\'t get sign from qcloud !' . PHP_EOL);
+        return false;
+    }
+    return $sign;
+}
+
+function img_pron_check($pic,$sign=''){
+    if (!$sign){
+        $sign = get_qcloud_sign();
+    }
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Content-Type: multipart/form-data",
+        ]
+    );
+    curl_setopt($ch,CURLOPT_URL,"http://web.image.myqcloud.com/photos/v2/10000037/detect/0?sign=${sign}");
+    $body = [ "filecontent" => $pic , ];
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    $result = json_decode(curl_exec($ch),true);
+    if($result['message'] != 'SUCCESS'){
+        error_log('Can\'t upload image to qcloud!' . PHP_EOL . json_encode($result) . PHP_EOL);
+        continue;
+    }
+        
+    curl_close($ch);
+        
+    $s_result = json_decode(
+        http_get("http://image.qcloud.com/api.php?Action=DetectDemo.Porn&fileId=" . $result['data']['fileid']),
+        true); 
+    if($s_result['code'] != 0){
+        error_log('Can\'t get result from qcloud!' . PHP_EOL . json_encode($s_result) . PHP_EOL);
+        continue;
+    }
+    
+    return $s_result;
+}
+
+function img_list_func_maker($func,$build){
+    $build = isset($build) ? $build : function () {return;};
+    $b_result = $build();
+    $return_func = function ($pic,&$strage,$pic_id) use ($func,$b_result) {
+        $strage[$pic_id] = $func($pic,$b_result);
+    };
+    return $return_func;
+}
+
+function img_list_process($img_list,$func_array){
+    $func_storage_array = array();
+    foreach($func_array as $id => $func){
+        $func_storage_array[$id] = array();
+    }
+    
+    $img_info_list = array();
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch,CURLOPT_FORBID_REUSE,0);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+        'Connection: Keep-Alive',
+        'Keep-Alive: 300'
+    ));
+    curl_setopt($ch,CURLOPT_ENCODING , "gzip");
+    
+    foreach($img_list as $id => $pic_url){
+        print_log("Processing in " . ($id+1) . "/" . count($img_list) . " image");
+        curl_setopt($ch,CURLOPT_URL,$pic_url);
+        $pic = curl_exec($ch);
+        //echo curl_getinfo($ch,CURLINFO_LOCAL_PORT) . PHP_EOL;
+        
+        foreach ($func_array as $f_id => $func) {
+            $func($pic,$func_storage_array[$f_id],$id);
+        }
+        
+    }
+    return $func_storage_array;
+    
+}
+
 function img_list_check($img_list){
     $img_info_list = array();
     
@@ -153,8 +256,8 @@ function get_posts($account,$num=5,$type='all'){
         curl_setopt($ch,CURLOPT_URL,$url);
         $json = curl_exec($ch);
         //echo curl_getinfo($ch,CURLINFO_LOCAL_PORT) . PHP_EOL; // For Keep-alive test
-        if ( ! $p_list = json_decode($json,true)){break;}
-        if ($p_list['meta']['status'] != 200 || count($p_list['response']['posts']) == 0){break;}
+        if ( ! $p_list = json_decode($json,true)){error_log($json);break;}
+        if ($p_list['meta']['status'] != 200 || count($p_list['response']['posts']) == 0){error_log($json);break;}
         $posts_list = array_merge($posts_list,$p_list['response']['posts']) ;
     }
     return $posts_list;
