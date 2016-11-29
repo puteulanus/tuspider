@@ -14,6 +14,14 @@ $blacklist_array = json_decode(file_get_contents($blacklist));
 $whitelist_array = json_decode(file_get_contents($whitelist));
 
 while(count($tmplist_array)){
+    
+    if(in_array($tmplist_array[0],$whitelist_array) || in_array($tmplist_array[0],$blacklist_array)){
+        unset($tmplist_array[0]);
+        $tmplist_array = array_values($tmplist_array);
+        file_put_contents($tmplist,json_encode($tmplist_array));
+        continue;
+    }
+    
     $posts = get_posts($tmplist_array[0]);
     if(!posts_check_basic($posts)){blacklist_add($tmplist_array[0]);continue;}
     if(count($posts) < 100){blacklist_add($tmplist_array[0]);continue;}
