@@ -118,7 +118,7 @@ function img_pron_check($pic,$sign=''){
         true); 
     if($s_result['code'] != 0){
         error_log('Can\'t get result from qcloud!' . PHP_EOL . json_encode($s_result) . PHP_EOL);
-        continue;
+        return false;
     }
     
     return $s_result;
